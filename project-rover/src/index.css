@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+/* src/index.css */
+
+@import "leaflet/dist/leaflet.css";
+@import "leaflet-routing-machine/dist/leaflet-routing-machine.css"; /* <-- THIS ONE IS CRITICAL */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Your depot-marker style */
+.depot-marker {
+  filter: hue-rotate(180deg) brightness(0.7);
+}

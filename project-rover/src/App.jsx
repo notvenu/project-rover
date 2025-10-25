@@ -7,7 +7,6 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import 'leaflet-routing-machine';
-// The 'lrm-graphhopper' import is GONE (this was the fix)
 
 // --- Icon Imports ---
 import {
@@ -17,8 +16,12 @@ import {
   ExclamationTriangleIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/solid';
+import {
+  ClockIcon,
+  ArrowsRightLeftIcon,
+} from '@heroicons/react/24/outline'; // <-- NEW: Outline icons for stats
 
-// --- Custom Leaflet Icons ---
+// --- Custom Leaflet Icons (Unchanged) ---
 const blueIcon = new L.Icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -38,29 +41,21 @@ const depotIcon = new L.Icon({
   shadowSize: [41, 41],
   className: 'depot-marker',
 });
+const routeColors = ['#1d4ed8', '#be185d', '#ca8a04', '#16a34a'];
 
-// Array of colors for vehicle routes
-const routeColors = ['#1d4ed8', '#be185d', '#ca8a04', '#16a34a']; // blue, pink, yellow, green
-
-// --- Routing Machine Component ---
-// This component draws the full road route
+// --- Routing Machine Component (Unchanged) ---
 const RoutingMachine = ({ waypoints, color }) => {
   const map = useMap();
-
   useEffect(() => {
     if (!map) return;
-
     const leafletWaypoints = waypoints.map(wp => L.latLng(wp[0], wp[1]));
-
     const routingControl = L.Routing.control({
       waypoints: leafletWaypoints,
-      // --- This is the correct OSRM router ---
       router: L.Routing.osrmv1({
         serviceUrl: 'https://router.project-osrm.org/route/v1',
       }),
-      // -------------------------------------
-      createMarker: () => null, // Hide default markers
-      show: false, // Hide text instructions
+      createMarker: () => null,
+      show: false,
       addWaypoints: false,
       routeWhileDragging: false,
       fitSelectedRoutes: false,
@@ -68,10 +63,8 @@ const RoutingMachine = ({ waypoints, color }) => {
         styles: [{ color: color, opacity: 0.8, weight: 6 }],
       },
     }).addTo(map);
-
     return () => map.removeControl(routingControl);
   }, [map, waypoints, color]);
-
   return null;
 };
 
@@ -79,6 +72,8 @@ const RoutingMachine = ({ waypoints, color }) => {
 export default function App() {
   const [locations, setLocations] = useState([]);
   const [routes, setRoutes] = useState([]);
+  const [indexRoutes, setIndexRoutes] = useState([]);
+  const [routeStats, setRouteStats] = useState([]); // <-- NEW: Holds time/distance
   const [mode, setMode] = useState('normal');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -94,8 +89,13 @@ export default function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setLocations(data.locations);
-      setRoutes(data.routes);
+
+      // Set state with fallbacks
+      setLocations(data.locations || []);
+      setRoutes(data.routes || []);
+      setIndexRoutes(data.index_routes || []);
+      setRouteStats(data.route_stats || []); // <-- NEW: Set the stats
+      
       setMode(apiMode);
     } catch (e) {
       console.error('Failed to fetch routes:', e);
@@ -117,7 +117,7 @@ export default function App() {
           AI Dynamic Routing Dashboard
         </h1>
 
-        {/* Action Buttons */}
+        {/* Action Buttons (Unchanged) */}
         <div className="mb-8 space-y-3">
           <button
             onClick={() => fetchRoutes('normal')}
@@ -143,34 +143,53 @@ export default function App() {
           </button>
         </div>
 
-        {/* Stop List */}
-        <h2 className="mb-3 text-xl font-semibold text-gray-800">
-          Delivery Stops
-        </h2>
+        {/* Scrollable Area */}
         <div className="flex-1 overflow-y-auto pr-2">
-          {locations.map((loc, index) => (
-            <div
-              key={index}
-              className="mb-2 flex items-center rounded-md bg-gray-50 p-3"
-            >
-              {index === 0 ? (
-                <HomeModernIcon className="mr-3 h-6 w-6 flex-shrink-0 text-indigo-700" />
-              ) : (
-                <MapPinIcon className="mr-3 h-6 w-6 flex-shrink-0 text-red-500" />
-              )}
-              <div className="flex-1">
-                <span className="font-bold text-gray-800">
-                  {index === 0 ? 'Depot' : `Stop ${index}`}
-                </span>
-                <p className="text-sm text-gray-600">
-                  {loc[0].toFixed(4)}, {loc[1].toFixed(4)}
-                </p>
+          {/* Stop List (Unchanged) */}
+          <h2 className="mb-3 text-xl font-semibold text-gray-800">
+            Delivery Stops
+          </h2>
+          <div className="mb-6 space-y-2">
+            {locations.map((loc, index) => (
+              <div
+                key={index}
+                className="flex items-center rounded-md bg-gray-50 p-3"
+              >
+                {index === 0 ? (
+                  <HomeModernIcon className="mr-3 h-6 w-6 flex-shrink-0 text-indigo-700" />
+                ) : (
+                  <MapPinIcon className="mr-3 h-6 w-6 flex-shrink-0 text-red-500" />
+                )}
+                <div className="flex-1">
+                  <span className="font-bold text-gray-800">
+                    {index === 0 ? 'Depot' : `Stop ${index}`}
+                  </span>
+                  <p className="text-sm text-gray-600">
+                    {loc[0].toFixed(4)}, {loc[1].toFixed(4)}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          {/* Vehicle Routes Section */}
+          <h2 className="mb-3 text-xl font-semibold text-gray-800">
+            Vehicle Routes
+          </h2>
+          <div className="space-y-3">
+            {indexRoutes.map((route, vIndex) => (
+              <RouteDisplay
+                key={vIndex}
+                vehicleIndex={vIndex}
+                routeIndices={route}
+                color={routeColors[vIndex % routeColors.length]}
+                stats={routeStats[vIndex]} // <-- NEW: Pass the stats object
+              />
+            ))}
+          </div>
         </div>
 
-        {/* Legend */}
+        {/* Legend (Unchanged) */}
         <div className="mt-8 pt-4 border-t border-gray-200">
           <h3 className="mb-3 text-base font-semibold text-gray-800">Legend</h3>
           <ul className="space-y-2 text-sm text-gray-600">
@@ -194,7 +213,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Right Map View */}
+      {/* Right Map View (Unchanged) */}
       <div className="flex-1 relative">
         {isLoading && <LoadingOverlay />}
         {!isLoading && error && <ErrorOverlay error={error} />}
@@ -208,10 +227,54 @@ export default function App() {
   );
 }
 
-// --- Map Component ---
+// --- Helper function to format the route text (Unchanged) ---
+function formatRouteText(routeIndices) {
+  return routeIndices
+    .map(index => (index === 0 ? 'Depot' : `Stop ${index}`))
+    .join(' → ');
+}
+
+// --- UPDATED: Component to display a single vehicle's route ---
+function RouteDisplay({ vehicleIndex, routeIndices, color, stats }) {
+  const routeText = formatRouteText(routeIndices);
+
+  return (
+    <div className="rounded-md border-l-4 p-4 shadow-sm bg-white" style={{ borderColor: color }}>
+      <div className="flex items-center mb-2">
+        <TruckIcon className="mr-3 h-6 w-6 flex-shrink-0" style={{ color: color }} />
+        <h3 className="text-lg font-bold" style={{ color: color }}>
+          Vehicle {vehicleIndex + 1}
+        </h3>
+      </div>
+      
+      {/* --- NEW STATS SECTION --- */}
+      {stats && (
+        <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+          <div className="flex items-center text-gray-700">
+            <ClockIcon className="mr-1.5 h-5 w-5 text-gray-500" />
+            <strong>Time:</strong>
+            <span className="ml-1">{stats.time} min</span>
+          </div>
+          <div className="flex items-center text-gray-700">
+            <ArrowsRightLeftIcon className="mr-1.5 h-5 w-5 text-gray-500" />
+            <strong>Distance:</strong>
+            <span className="ml-1">{stats.distance} km</span>
+          </div>
+        </div>
+      )}
+      {/* --- END: NEW STATS SECTION --- */}
+
+      <p className="text-sm text-gray-800 font-medium">
+        {routeText}
+      </p>
+    </div>
+  );
+}
+
+
+// --- Map Component (Unchanged) ---
 function MapComponent({ locations, routes, routeColors }) {
   const mapCenter = [40.7128, -74.0060];
-
   return (
     <MapContainer center={mapCenter} zoom={12} className="h-full w-full">
       <TileLayer
@@ -219,8 +282,6 @@ function MapComponent({ locations, routes, routeColors }) {
         attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
       />
       <ChangeView bounds={locations} />
-
-      {/* This adds the markers */}
       {locations.map((loc, index) => (
         <Marker
           key={index}
@@ -234,8 +295,6 @@ function MapComponent({ locations, routes, routeColors }) {
           </Popup>
         </Marker>
       ))}
-
-      {/* This adds the full road routes */}
       {routes.map((route, index) => (
         <RoutingMachine
           key={index}
